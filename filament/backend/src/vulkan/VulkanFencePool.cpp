@@ -19,6 +19,7 @@
 #include "VulkanConstants.h"
 
 #include <algorithm>
+#include <chrono>
 #include <deque>
 #include <utility>
 #include <vector>
@@ -30,7 +31,9 @@ namespace filament::backend {
 
 namespace {
 
-static constexpr uint32_t TIME_BEFORE_EVICTION = 3;
+// Idle fences are already reset, so they can be destroyed at any time. Evict them by idle time
+// rather than by gc() count, since gc() can run many times per frame (e.g. standalone views).
+static constexpr std::chrono::seconds IDLE_TIME_BEFORE_EVICTION{ 1 };
 
 }  // namespace
 
@@ -43,7 +46,7 @@ VulkanFencePool::VulkanFencePool(VulkanContext const& context,
         VkFence fence = allocateFence();
         assert_invariant(fence != VK_NULL_HANDLE);
         if (fence != VK_NULL_HANDLE) {
-            mFences.push_back(std::make_pair(mCurrFrame, fence));
+            mFences.push_back(std::make_pair(std::chrono::steady_clock::now(), fence));
         }
     }
     mNumFences = mFences.size();  // Only count the fences we successfully acquired.
@@ -72,12 +75,9 @@ void VulkanFencePool::gc() noexcept {
         });
     mFenceStatuses.erase(expiredStatuses, mFenceStatuses.end());
 
-    if (++mCurrFrame <= TIME_BEFORE_EVICTION) {
-        return;
-    }
-
+    auto const now = std::chrono::steady_clock::now();
     while (mNumFences > mMinPoolSize && !mFences.empty() &&
-           mFences.front().first + TIME_BEFORE_EVICTION < mCurrFrame) {
+           now - mFences.front().first > IDLE_TIME_BEFORE_EVICTION) {
         destroyFence(mFences.front().second);
         mFences.pop_front();
         --mNumFences;
@@ -126,7 +126,7 @@ void VulkanFencePool::releaseFence(VkFence fence) noexcept {
     // Reset the fence before returning it to the pool of available
     // fences.
     vkResetFences(mDevice, 1, &fence);
-    mFences.push_back(std::make_pair(mCurrFrame, fence));
+    mFences.push_back(std::make_pair(std::chrono::steady_clock::now(), fence));
 }
 
 VkFence VulkanFencePool::allocateFence() const noexcept {

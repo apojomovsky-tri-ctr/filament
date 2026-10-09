@@ -20,6 +20,7 @@
 #include "VulkanAsyncHandles.h"
 #include "VulkanContext.h"
 
+#include <chrono>
 #include <deque>
 #include <utility>
 #include <vector>
@@ -71,10 +72,9 @@ private:
     VulkanContext const& mContext;
     const VkDevice mDevice;
     const uint32_t mMinPoolSize;
-    std::deque<std::pair<uint64_t, VkFence>> mFences;
+    std::deque<std::pair<std::chrono::steady_clock::time_point, VkFence>> mFences;
     std::vector<std::weak_ptr<VulkanCmdFence>> mFenceStatuses;
     uint32_t mNumFences = 0;
-    uint64_t mCurrFrame = 0;
 };
 
 } // namespace filament::backend

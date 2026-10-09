@@ -641,6 +641,7 @@ if (FILAMENT_BUILD_TESTING)
         )
         if (FILAMENT_SUPPORTS_VULKAN)
             list(APPEND BACKEND_TEST_SRC
+                    test/test_VulkanFencePool.cpp
                     test/test_VulkanSpirvUtils.cpp
             )
         endif()
